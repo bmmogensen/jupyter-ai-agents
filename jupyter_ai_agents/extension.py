@@ -14,10 +14,14 @@ from traitlets.config import Configurable
 from jupyter_server.utils import url_path_join
 from jupyter_server.extension.application import ExtensionApp, ExtensionAppJinjaMixin
 
+from agent_runtimes.mcp import get_mcp_toolsets, initialize_mcp_toolsets
 from agent_runtimes.mcp.servers import initialize_mcp_servers
 from jupyter_ai_agents.handlers.index import IndexHandler
 from jupyter_ai_agents.handlers.config import ConfigHandler
-from jupyter_ai_agents.handlers.chat_handler import VercelAIChatHandler
+from jupyter_ai_agents.handlers.chat_handler import (
+    VercelAIChatHandler,
+    VercelAITerminateHandler,
+)
 from jupyter_ai_agents.agents.chat_agent import create_chat_agent
 from jupyter_ai_agents.__version__ import __version__
 
@@ -117,8 +121,42 @@ class JupyterAIAgentsExtensionApp(ExtensionAppJinjaMixin, ExtensionApp):
             self.explain_error_system_prompt_path or None
         )
 
-        # Initialize MCP servers (includes local Jupyter MCP server)
-        self.settings["mcp_servers"] = asyncio.run(initialize_mcp_servers())
+        # Initialize MCP toolsets so MCP endpoints expose all configured tools.
+        self.settings["mcp_servers"] = []
+        try:
+            asyncio.run(initialize_mcp_toolsets())
+            self.settings["mcp_servers"] = get_mcp_toolsets()
+            self.log.info(
+                "Loaded %d MCP toolset(s) from toolsets manager",
+                len(self.settings["mcp_servers"]),
+            )
+            for index, server in enumerate(self.settings["mcp_servers"]):
+                server_id = getattr(server, "id", f"toolset_{index}")
+                server_name = getattr(server, "name", "")
+                self.log.info(
+                    "MCP toolset[%d]: id=%s name=%s type=%s",
+                    index,
+                    server_id,
+                    server_name,
+                    type(server).__name__,
+                )
+                tools = getattr(server, "tools", None)
+                if tools:
+                    tool_names = [getattr(tool, "name", str(tool)) for tool in tools]
+                    self.log.info(
+                        "MCP toolset[%d] tools (%d): %s",
+                        index,
+                        len(tool_names),
+                        tool_names,
+                    )
+        except Exception as exc:
+            self.log.warning("Failed to initialize MCP toolsets: %s", exc)
+
+        # Initialize MCP servers (includes local Jupyter MCP server metadata)
+        try:
+            asyncio.run(initialize_mcp_servers())
+        except Exception as exc:
+            self.log.warning("Failed to initialize MCP servers: %s", exc)
 
         # Create chat agent
         try:
@@ -157,6 +195,8 @@ class JupyterAIAgentsExtensionApp(ExtensionAppJinjaMixin, ExtensionApp):
             (url_path_join(self.name), IndexHandler),
             (url_path_join(self.name, "configure"), ConfigHandler),
             (url_path_join(self.name, "chat"), VercelAIChatHandler),
+            (url_path_join("api", "v1", "vercel-ai", "chat"), VercelAIChatHandler),
+            (url_path_join("api", "v1", "vercel-ai", "terminate"), VercelAITerminateHandler),
         ]
         self.handlers.extend(handlers)
 

@@ -117,19 +117,35 @@ class VercelAIChatHandler(APIHandler):
                 pass
             
             model = body.get("model")
+            message_count = 0
+            raw_messages = body.get("messages")
+            if isinstance(raw_messages, list):
+                message_count = len(raw_messages)
             
             # Check if any MCP tools are enabled (builtinTools contains enabled tool names)
             enabled_tools = _parse_enabled_tool_names(body.get("builtinTools", []))
             enabled_servers = _parse_enabled_tool_names(body.get("enabledServers", []))
             enabled_prefixes = {tool.split(".", 1)[0] for tool in enabled_tools if "." in tool}
             use_mcp_server = bool(enabled_tools or enabled_servers)
+            logger.info(
+                "Chat request received: model=%s messages=%d enabled_tools=%d enabled_servers=%d",
+                model,
+                message_count,
+                len(enabled_tools),
+                len(enabled_servers),
+            )
 
             # Build toolsets list
             toolsets = list(self.settings.get("chat_toolsets", []))
+            available_mcp_servers = list(self.settings.get("mcp_servers", []))
 
             if use_mcp_server:
                 namespaced_toolsets = []
-                for index, server in enumerate(self.settings.get("mcp_servers", [])):
+                if not available_mcp_servers:
+                    logger.warning(
+                        "No MCP servers available in settings while MCP tools are enabled."
+                    )
+                for index, server in enumerate(available_mcp_servers):
                     server_id = resolve_mcp_server_id(server, fallback=f"mcp_server_{index}")
                     if enabled_servers and server_id not in enabled_servers:
                         continue
@@ -138,10 +154,19 @@ class VercelAIChatHandler(APIHandler):
                     namespaced_toolsets.append(
                         NamespacedToolset(wrapped=server, namespace=server_id)
                     )
+                available_server_ids = [
+                    resolve_mcp_server_id(server, fallback=f"mcp_server_{index}")
+                    for index, server in enumerate(available_mcp_servers)
+                ]
                 toolsets.extend(namespaced_toolsets)
                 logger.info(
                     "Using shared MCP servers for chat request "
-                    f"with {len(enabled_tools)} enabled tools"
+                    "with %d enabled tools, %d enabled servers; "
+                    "selected toolsets=%s; available MCP servers=%s",
+                    len(enabled_tools),
+                    len(enabled_servers),
+                    [toolset.namespace for toolset in namespaced_toolsets],
+                    available_server_ids,
                 )
 
             # Get builtin tools (empty list - tools metadata is only for UI display)
@@ -162,6 +187,11 @@ class VercelAIChatHandler(APIHandler):
                 usage_limits=usage_limits,
                 toolsets=toolsets,
                 builtin_tools=builtin_tools,
+            )
+            logger.info(
+                "Chat response ready: status=%s content_type=%s",
+                getattr(response, "status_code", None),
+                response.headers.get("content-type") if hasattr(response, "headers") else None,
             )
             
             await self._stream_response(response)
@@ -207,3 +237,12 @@ class VercelAIChatHandler(APIHandler):
         # Finish the response
         if not self._finished:
             self.finish()
+
+
+class VercelAITerminateHandler(APIHandler):
+    """Handler for /api/v1/vercel-ai/terminate requests."""
+
+    async def post(self) -> None:
+        logger.info("Received Vercel AI terminate request")
+        self.set_status(204)
+        self.finish()

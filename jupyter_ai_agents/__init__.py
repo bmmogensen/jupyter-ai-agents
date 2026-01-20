@@ -25,3 +25,8 @@ def _jupyter_server_extension_points() -> List[Dict[str, Any]]:
         "module": "jupyter_ai_agents",
         "app": JupyterAIAgentsExtensionApp,
     }]
+
+
+def _load_jupyter_server_extension(serverapp):
+    """Backwards-compatible loader for classic server extension entrypoints."""
+    return JupyterAIAgentsExtensionApp._load_jupyter_server_extension(serverapp)
