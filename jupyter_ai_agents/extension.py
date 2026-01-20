@@ -137,21 +137,14 @@ class JupyterAIAgentsExtensionApp(ExtensionAppJinjaMixin, ExtensionApp):
                     server_name,
                     type(server).__name__,
                 )
-                try:
-                    tools = asyncio.run(server.list_tools())
-                    tool_names = [getattr(tool, "name", str(tool)) for tool in tools or []]
+                tools = getattr(server, "tools", None)
+                if tools:
+                    tool_names = [getattr(tool, "name", str(tool)) for tool in tools]
                     self.log.info(
                         "MCP toolset[%d] tools (%d): %s",
                         index,
                         len(tool_names),
                         tool_names,
-                    )
-                except Exception as exc:
-                    self.log.warning(
-                        "Failed to list tools for MCP toolset[%d] (%s): %s",
-                        index,
-                        server_id,
-                        exc,
                     )
         except Exception as exc:
             self.log.warning("Failed to initialize MCP toolsets: %s", exc)
