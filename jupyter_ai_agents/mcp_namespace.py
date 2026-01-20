@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import logging
 import re
 from typing import Any
 
@@ -25,6 +26,7 @@ def resolve_mcp_server_id(server: Any, fallback: str | None = None) -> str:
     return server_id or ""
 
 
+logger = logging.getLogger(__name__)
 _ALLOWED_TOOL_NAME_RE = re.compile(r"[^a-zA-Z0-9_-]")
 
 
@@ -94,4 +96,13 @@ class NamespacedToolset(WrapperToolset[AgentDepsT]):
             original_name = name[len(prefix):] if name.startswith(prefix) else name
         ctx = replace(ctx, tool_name=original_name)
         tool = replace(tool, tool_def=replace(tool.tool_def, name=original_name))
-        return await super().call_tool(original_name, tool_args, ctx, tool)
+        try:
+            return await super().call_tool(original_name, tool_args, ctx, tool)
+        except Exception:
+            logger.exception(
+                "MCP tool call failed: tool=%s namespaced=%s args=%s",
+                original_name,
+                name,
+                tool_args,
+            )
+            raise
