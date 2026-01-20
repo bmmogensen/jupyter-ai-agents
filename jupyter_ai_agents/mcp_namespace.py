@@ -98,11 +98,13 @@ class NamespacedToolset(WrapperToolset[AgentDepsT]):
         tool = replace(tool, tool_def=replace(tool.tool_def, name=original_name))
         try:
             return await super().call_tool(original_name, tool_args, ctx, tool)
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "MCP tool call failed: tool=%s namespaced=%s args=%s",
                 original_name,
                 name,
                 tool_args,
             )
-            raise
+            raise RuntimeError(
+                f"MCP tool call failed for {original_name}: {type(exc).__name__}: {exc}"
+            ) from exc
