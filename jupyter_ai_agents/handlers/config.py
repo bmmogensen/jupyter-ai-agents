@@ -14,6 +14,10 @@ from agent_runtimes.mcp.servers import initialize_mcp_servers
 from jupyter_server.base.handlers import APIHandler
 from jupyter_server.extension.handler import ExtensionHandlerMixin
 from jupyter_ai_agents.__version__ import __version__
+from jupyter_ai_agents.mcp_namespace import (
+    build_namespaced_tool_name,
+    resolve_mcp_server_id,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -80,7 +84,7 @@ class ConfigHandler(ExtensionHandlerMixin, APIHandler):
             logger.warning("Failed to initialize MCP servers: %s", exc)
             servers = []
 
-        for server in servers:
+        for index, server in enumerate(servers):
             if hasattr(server, "model_dump"):
                 server_data = server.model_dump(by_alias=True)
             elif hasattr(server, "dict"):
@@ -88,6 +92,7 @@ class ConfigHandler(ExtensionHandlerMixin, APIHandler):
             else:
                 server_data = {}
 
+            server_id = resolve_mcp_server_id(server, fallback=f"mcp_server_{index}")
             tools = []
             try:
                 server_tools = await server.list_tools()
@@ -98,7 +103,7 @@ class ConfigHandler(ExtensionHandlerMixin, APIHandler):
                         tool_name = tool.get("name")
                         tool_description = tool.get("description")
                     tools.append({
-                        "name": tool_name,
+                        "name": build_namespaced_tool_name(server_id, tool_name or ""),
                         "description": tool_description or "",
                         "enabled": True,
                     })
@@ -110,7 +115,7 @@ class ConfigHandler(ExtensionHandlerMixin, APIHandler):
                 )
 
             mcp_servers.append({
-                "id": server_data.get("id") or getattr(server, "id", ""),
+                "id": server_id,
                 "name": server_data.get("name") or getattr(server, "name", ""),
                 "description": server_data.get("description") or getattr(server, "description", ""),
                 "url": server_data.get("url") or "",
