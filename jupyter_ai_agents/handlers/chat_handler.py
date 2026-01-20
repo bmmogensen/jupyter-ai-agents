@@ -13,7 +13,17 @@ from pydantic_ai import UsageLimits
 from pydantic_ai.ui.vercel_ai import VercelAIAdapter
 from starlette.requests import Request
 
+from jupyter_ai_agents.mcp_namespace import NamespacedToolset, resolve_mcp_server_id
+
 logger = logging.getLogger(__name__)
+
+
+def _parse_enabled_tool_names(raw_tools: Any) -> set[str]:
+    if isinstance(raw_tools, list):
+        return {tool for tool in raw_tools if isinstance(tool, str) and tool}
+    if isinstance(raw_tools, str) and raw_tools:
+        return {raw_tools}
+    return set()
 
 
 class TornadoRequestAdapter(Request):
@@ -109,18 +119,29 @@ class VercelAIChatHandler(APIHandler):
             model = body.get("model")
             
             # Check if any MCP tools are enabled (builtinTools contains enabled tool names)
-            # If builtinTools is non-empty, we should connect to the MCP server
-            builtin_tools_from_request = body.get("builtinTools", [])
-            use_mcp_server = len(builtin_tools_from_request) > 0
+            enabled_tools = _parse_enabled_tool_names(body.get("builtinTools", []))
+            enabled_servers = _parse_enabled_tool_names(body.get("enabledServers", []))
+            enabled_prefixes = {tool.split(".", 1)[0] for tool in enabled_tools if "." in tool}
+            use_mcp_server = bool(enabled_tools or enabled_servers)
 
             # Build toolsets list
             toolsets = list(self.settings.get("chat_toolsets", []))
 
             if use_mcp_server:
-                toolsets.extend(self.settings.get("mcp_servers", []))
+                namespaced_toolsets = []
+                for index, server in enumerate(self.settings.get("mcp_servers", [])):
+                    server_id = resolve_mcp_server_id(server, fallback=f"mcp_server_{index}")
+                    if enabled_servers and server_id not in enabled_servers:
+                        continue
+                    if enabled_prefixes and server_id not in enabled_prefixes:
+                        continue
+                    namespaced_toolsets.append(
+                        NamespacedToolset(wrapped=server, namespace=server_id)
+                    )
+                toolsets.extend(namespaced_toolsets)
                 logger.info(
                     "Using shared MCP servers for chat request "
-                    f"with {len(builtin_tools_from_request)} enabled tools"
+                    f"with {len(enabled_tools)} enabled tools"
                 )
 
             # Get builtin tools (empty list - tools metadata is only for UI display)
