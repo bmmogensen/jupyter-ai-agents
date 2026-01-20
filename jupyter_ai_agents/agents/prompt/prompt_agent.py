@@ -4,12 +4,14 @@
 
 """Pydantic AI Prompt Agent - creates and executes code based on user instructions."""
 
+import asyncio
 import logging
 from typing import Any
 
 from pydantic_ai import Agent
 from pydantic_ai.mcp import MCPServerStreamableHTTP
 
+from agent_runtimes.mcp.servers import initialize_mcp_servers
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +60,7 @@ class PromptAgentDeps:
 
 def create_prompt_agent(
     model: str,
-    mcp_server: MCPServerStreamableHTTP,
+    mcp_servers: list[MCPServerStreamableHTTP],
     notebook_context: dict[str, Any] | None = None,
     max_tool_calls: int = 10,
 ) -> Agent[PromptAgentDeps, str]:
@@ -67,7 +69,7 @@ def create_prompt_agent(
     
     Args:
         model: Model identifier (e.g., 'anthropic:claude-sonnet-4-0', 'openai:gpt-4o')
-        mcp_server: MCP server connection to jupyter-mcp-server
+        mcp_servers: MCP server connections to use as toolsets
         notebook_context: Optional context about the notebook
         max_tool_calls: Maximum number of tool calls to make (default: 10)
     
@@ -94,7 +96,7 @@ def create_prompt_agent(
     # Create agent with MCP toolset
     agent = Agent(
         model,
-        toolsets=[mcp_server],
+        toolsets=mcp_servers,
         model_settings={"parallel_tool_calls": False},
         deps_type=PromptAgentDeps,
         system_prompt=system_prompt,
@@ -204,5 +206,5 @@ def create_prompt_agent_sync(
     Returns:
         Configured agent
     """
-    mcp_server = create_mcp_server(base_url, token)
-    return create_prompt_agent(model, mcp_server, notebook_context)
+    mcp_servers = asyncio.run(initialize_mcp_servers())
+    return create_prompt_agent(model, mcp_servers, notebook_context)

@@ -129,8 +129,7 @@ def prompt(
                 mcp_client = MCPServerStreamableHTTP(server_url)
                 toolsets.append(mcp_client)
             
-            # Use first MCP server for backward compatibility with create_prompt_agent
-            mcp_server = toolsets[0] if toolsets else None
+            mcp_servers_list = toolsets
             
             # Determine model - handle azure-openai:deployment format or use provider+name
             if model:
@@ -166,7 +165,7 @@ def prompt(
             
             # Create and run agent
             logger.info("Creating prompt agent...")
-            agent = create_prompt_agent(model_obj, mcp_server, notebook_context, max_tool_calls=max_tool_calls)
+            agent = create_prompt_agent(model_obj, mcp_servers_list, notebook_context, max_tool_calls=max_tool_calls)
             
             logger.info("Running prompt agent...")
             result = await run_prompt_agent(agent, input, notebook_context, max_tool_calls=max_tool_calls, max_requests=max_requests)
@@ -258,8 +257,7 @@ def explain_error(
                 mcp_client = MCPServerStreamableHTTP(server_url)
                 toolsets.append(mcp_client)
             
-            # Use first MCP server for backward compatibility with create_explain_error_agent
-            mcp_server = toolsets[0] if toolsets else None
+            mcp_servers_list = toolsets
             
             # Determine model - handle azure-openai:deployment format or use provider+name
             if model:
@@ -297,7 +295,7 @@ def explain_error(
             logger.info("Creating explain error agent...")
             agent = create_explain_error_agent(
                 model_obj,
-                mcp_server,
+                mcp_servers_list,
                 notebook_content=notebook_content,
                 error_cell_index=current_cell_index,
                 max_tool_calls=max_tool_calls,
