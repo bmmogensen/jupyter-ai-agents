@@ -44,6 +44,24 @@ class JupyterAIAgentsExtensionApp(ExtensionAppJinjaMixin, ExtensionApp):
 
     template_paths = [DEFAULT_TEMPLATE_FILES_PATH]
 
+    chat_system_prompt_path = Unicode(
+        "",
+        config=True,
+        help=("Optional override path for the chat system prompt markdown."),
+    )
+
+    prompt_system_prompt_path = Unicode(
+        "",
+        config=True,
+        help=("Optional override path for the prompt system prompt markdown."),
+    )
+
+    explain_error_system_prompt_path = Unicode(
+        "",
+        config=True,
+        help=("Optional override path for the explain error system prompt markdown."),
+    )
+
     class Launcher(Configurable):
         """Jupyter AI Agents launcher configuration"""
 
@@ -93,6 +111,11 @@ class JupyterAIAgentsExtensionApp(ExtensionAppJinjaMixin, ExtensionApp):
         self.log.info("Initializing Jupyter AI Agents extension...")
         
         self.settings.update({"disable_check_xsrf": True})
+        self.settings["chat_system_prompt_path"] = self.chat_system_prompt_path or None
+        self.settings["prompt_system_prompt_path"] = self.prompt_system_prompt_path or None
+        self.settings["explain_error_system_prompt_path"] = (
+            self.explain_error_system_prompt_path or None
+        )
 
         # Initialize MCP servers (includes local Jupyter MCP server)
         self.settings["mcp_servers"] = asyncio.run(initialize_mcp_servers())
@@ -100,7 +123,7 @@ class JupyterAIAgentsExtensionApp(ExtensionAppJinjaMixin, ExtensionApp):
         # Create chat agent
         try:
             self.log.info("Creating chat agent...")
-            agent = create_chat_agent()
+            agent = create_chat_agent(settings=self.settings)
             if agent:
                 self.settings["chat_agent"] = agent
                 self.settings["chat_toolsets"] = []  # Can be extended with MCP servers via request parameter
