@@ -4,9 +4,18 @@
 
 """AI agent for Jupyter AI Agents chat."""
 
+from importlib import resources
+
 from pydantic_ai import Agent
 
 from jupyter_ai_agents.utils import create_model_with_provider
+
+
+SYSTEM_PROMPT = (
+    resources.files("jupyter_ai_agents.prompts")
+    .joinpath("chat_system.md")
+    .read_text(encoding="utf-8")
+)
 
 
 def create_chat_agent(
@@ -54,19 +63,7 @@ def create_chat_agent(
         return None
 
     try:
-        agent = Agent(
-            model_obj,
-            instructions="""You are a helpful AI assistant integrated into JupyterLab.
-
-You can help users with:
-- Writing and debugging Python code
-- Data analysis and visualization
-- Understanding Jupyter notebooks
-- General programming questions
-- Scientific computing tasks
-
-Always be clear, concise, and provide working code examples when appropriate.""",
-        )
+        agent = Agent(model_obj, instructions=SYSTEM_PROMPT)
 
         return agent
     except Exception:
