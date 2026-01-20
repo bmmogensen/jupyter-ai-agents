@@ -5,20 +5,14 @@
 """Pydantic AI Prompt Agent - creates and executes code based on user instructions."""
 
 import logging
-from importlib import resources
 from typing import Any
 
 from pydantic_ai import Agent
 from pydantic_ai.mcp import MCPServerStreamableHTTP
 
+from jupyter_ai_agents.prompts.loader import load_prompt_text
+
 logger = logging.getLogger(__name__)
-
-
-SYSTEM_PROMPT = (
-    resources.files("jupyter_ai_agents.prompts")
-    .joinpath("prompt_system.md")
-    .read_text(encoding="utf-8")
-)
 
 
 class PromptAgentDeps:
@@ -40,6 +34,7 @@ def create_prompt_agent(
     model: str,
     mcp_servers: list[MCPServerStreamableHTTP],
     notebook_context: dict[str, Any] | None = None,
+    settings: dict[str, Any] | None = None,
     max_tool_calls: int = 10,
 ) -> Agent[PromptAgentDeps, str]:
     """
@@ -54,8 +49,13 @@ def create_prompt_agent(
     Returns:
         Configured Pydantic AI agent
     """
+    settings = settings or {}
+    base_prompt = load_prompt_text(
+        "prompt_system.md",
+        override_path=settings.get("prompt_system_prompt_path"),
+    )
     # Enhance system prompt with notebook context if available
-    system_prompt = SYSTEM_PROMPT
+    system_prompt = base_prompt
     
     if notebook_context:
         if notebook_context.get('full_context') and notebook_context.get('notebook_content'):

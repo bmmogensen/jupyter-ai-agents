@@ -5,21 +5,14 @@
 """Pydantic AI Explain Error Agent - analyzes and fixes notebook errors."""
 
 import logging
-from importlib import resources
 from typing import Any
 
 from pydantic_ai import Agent
 from pydantic_ai.mcp import MCPServerStreamableHTTP
 
+from jupyter_ai_agents.prompts.loader import load_prompt_text
 
 logger = logging.getLogger(__name__)
-
-
-SYSTEM_PROMPT = (
-    resources.files("jupyter_ai_agents.prompts")
-    .joinpath("explain_error_system.md")
-    .read_text(encoding="utf-8")
-)
 
 
 class ExplainErrorAgentDeps:
@@ -49,6 +42,7 @@ def create_explain_error_agent(
     notebook_content: str = "",
     error_info: dict[str, Any] | None = None,
     error_cell_index: int = -1,
+    settings: dict[str, Any] | None = None,
     max_tool_calls: int = 10,
 ) -> Agent[ExplainErrorAgentDeps, str]:
     """
@@ -65,8 +59,13 @@ def create_explain_error_agent(
     Returns:
         Configured Pydantic AI agent
     """
+    settings = settings or {}
+    base_prompt = load_prompt_text(
+        "explain_error_system.md",
+        override_path=settings.get("explain_error_system_prompt_path"),
+    )
     # Enhance system prompt with notebook and error context
-    system_prompt = SYSTEM_PROMPT
+    system_prompt = base_prompt
     
     if notebook_content:
         system_prompt += f"\n\nNotebook content (cells leading to error):\n{notebook_content}"

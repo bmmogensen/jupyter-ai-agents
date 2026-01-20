@@ -4,25 +4,17 @@
 
 """AI agent for Jupyter AI Agents chat."""
 
-from importlib import resources
-
 from pydantic_ai import Agent
 
+from jupyter_ai_agents.prompts.loader import load_prompt_text
 from jupyter_ai_agents.utils import create_model_with_provider
-
-
-SYSTEM_PROMPT = (
-    resources.files("jupyter_ai_agents.prompts")
-    .joinpath("chat_system.md")
-    .read_text(encoding="utf-8")
-)
-
 
 def create_chat_agent(
     model: str | None = None,
     model_provider: str = "anthropic",
     model_name: str = "claude-sonnet-4-5",
     timeout: float = 60.0,
+    settings: dict[str, str | None] | None = None,
 ) -> Agent | None:
     """
     Create the main chat agent for Jupyter AI Agents.
@@ -63,7 +55,12 @@ def create_chat_agent(
         return None
 
     try:
-        agent = Agent(model_obj, instructions=SYSTEM_PROMPT)
+        settings = settings or {}
+        system_prompt = load_prompt_text(
+            "chat_system.md",
+            override_path=settings.get("chat_system_prompt_path"),
+        )
+        agent = Agent(model_obj, instructions=system_prompt)
 
         return agent
     except Exception:
