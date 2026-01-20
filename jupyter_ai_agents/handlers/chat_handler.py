@@ -117,12 +117,23 @@ class VercelAIChatHandler(APIHandler):
                 pass
             
             model = body.get("model")
+            message_count = 0
+            raw_messages = body.get("messages")
+            if isinstance(raw_messages, list):
+                message_count = len(raw_messages)
             
             # Check if any MCP tools are enabled (builtinTools contains enabled tool names)
             enabled_tools = _parse_enabled_tool_names(body.get("builtinTools", []))
             enabled_servers = _parse_enabled_tool_names(body.get("enabledServers", []))
             enabled_prefixes = {tool.split(".", 1)[0] for tool in enabled_tools if "." in tool}
             use_mcp_server = bool(enabled_tools or enabled_servers)
+            logger.info(
+                "Chat request received: model=%s messages=%d enabled_tools=%d enabled_servers=%d",
+                model,
+                message_count,
+                len(enabled_tools),
+                len(enabled_servers),
+            )
 
             # Build toolsets list
             toolsets = list(self.settings.get("chat_toolsets", []))
@@ -176,6 +187,11 @@ class VercelAIChatHandler(APIHandler):
                 usage_limits=usage_limits,
                 toolsets=toolsets,
                 builtin_tools=builtin_tools,
+            )
+            logger.info(
+                "Chat response ready: status=%s content_type=%s",
+                getattr(response, "status_code", None),
+                response.headers.get("content-type") if hasattr(response, "headers") else None,
             )
             
             await self._stream_response(response)
