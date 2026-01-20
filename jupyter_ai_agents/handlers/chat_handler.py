@@ -237,3 +237,12 @@ class VercelAIChatHandler(APIHandler):
         # Finish the response
         if not self._finished:
             self.finish()
+
+
+class VercelAITerminateHandler(APIHandler):
+    """Handler for /api/v1/vercel-ai/terminate requests."""
+
+    async def post(self) -> None:
+        logger.info("Received Vercel AI terminate request")
+        self.set_status(204)
+        self.finish()

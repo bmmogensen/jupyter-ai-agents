@@ -18,7 +18,10 @@ from agent_runtimes.mcp import get_mcp_toolsets, initialize_mcp_toolsets
 from agent_runtimes.mcp.servers import initialize_mcp_servers
 from jupyter_ai_agents.handlers.index import IndexHandler
 from jupyter_ai_agents.handlers.config import ConfigHandler
-from jupyter_ai_agents.handlers.chat_handler import VercelAIChatHandler
+from jupyter_ai_agents.handlers.chat_handler import (
+    VercelAIChatHandler,
+    VercelAITerminateHandler,
+)
 from jupyter_ai_agents.agents.chat_agent import create_chat_agent
 from jupyter_ai_agents.__version__ import __version__
 
@@ -192,6 +195,8 @@ class JupyterAIAgentsExtensionApp(ExtensionAppJinjaMixin, ExtensionApp):
             (url_path_join(self.name), IndexHandler),
             (url_path_join(self.name, "configure"), ConfigHandler),
             (url_path_join(self.name, "chat"), VercelAIChatHandler),
+            (url_path_join("api", "v1", "vercel-ai", "chat"), VercelAIChatHandler),
+            (url_path_join("api", "v1", "vercel-ai", "terminate"), VercelAITerminateHandler),
         ]
         self.handlers.extend(handlers)
 
