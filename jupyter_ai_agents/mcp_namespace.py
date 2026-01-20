@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import re
 from typing import Any
 
 from pydantic_ai._run_context import AgentDepsT, RunContext
@@ -31,33 +32,64 @@ def build_namespaced_tool_name(server_id: str, tool_name: str) -> str:
     return f"{server_id}.{tool_name}"
 
 
+_ALLOWED_TOOL_NAME_RE = re.compile(r"[^a-zA-Z0-9_-]")
+
+
+def sanitize_tool_component(value: str, fallback: str = "tool") -> str:
+    """Sanitize a tool name component to match provider constraints."""
+    cleaned = _ALLOWED_TOOL_NAME_RE.sub("_", value or "")
+    cleaned = cleaned.strip("_-")
+    if not cleaned:
+        cleaned = fallback
+    return cleaned[:128]
+
+
 @dataclass
 class NamespacedToolset(WrapperToolset[AgentDepsT]):
-    """A toolset that namespaces tool names using a dot separator."""
+    """A toolset that namespaces tool names using a provider-safe separator."""
 
     namespace: str
-    separator: str = "."
+    separator: str = "_"
+    _name_map: dict[str, str] = None
 
     @property
     def tool_name_conflict_hint(self) -> str:
         return "Change the namespace to avoid name conflicts."
 
     async def get_tools(self, ctx: RunContext[AgentDepsT]) -> dict[str, ToolsetTool[AgentDepsT]]:
-        return {
-            new_name: replace(
+        self._name_map = {}
+        safe_namespace = sanitize_tool_component(self.namespace, fallback="mcp")
+        tool_map: dict[str, ToolsetTool[AgentDepsT]] = {}
+        for name, tool in (await super().get_tools(ctx)).items():
+            safe_name = sanitize_tool_component(name)
+            new_name = (
+                f"{safe_namespace}{self.separator}{safe_name}"
+                if safe_namespace
+                else safe_name
+            )
+            base_name = new_name
+            suffix = 1
+            while new_name in tool_map:
+                suffix += 1
+                suffix_str = f"{self.separator}{suffix}"
+                new_name = f"{base_name[: 128 - len(suffix_str)]}{suffix_str}"
+            self._name_map[new_name] = name
+            tool_map[new_name] = replace(
                 tool,
                 toolset=self,
                 tool_def=replace(tool.tool_def, name=new_name),
             )
-            for name, tool in (await super().get_tools(ctx)).items()
-            if (new_name := f"{self.namespace}{self.separator}{name}")
-        }
+        return tool_map
 
     async def call_tool(
         self, name: str, tool_args: dict[str, Any], ctx: RunContext[AgentDepsT], tool: ToolsetTool[AgentDepsT]
     ) -> Any:
-        prefix = f"{self.namespace}{self.separator}"
-        original_name = name[len(prefix):] if name.startswith(prefix) else name
+        original_name = None
+        if self._name_map:
+            original_name = self._name_map.get(name)
+        if original_name is None:
+            prefix = f"{sanitize_tool_component(self.namespace, fallback='mcp')}{self.separator}"
+            original_name = name[len(prefix):] if name.startswith(prefix) else name
         ctx = replace(ctx, tool_name=original_name)
         tool = replace(tool, tool_def=replace(tool.tool_def, name=original_name))
         return await super().call_tool(original_name, tool_args, ctx, tool)
