@@ -78,6 +78,7 @@ class ConfigHandler(ExtensionHandlerMixin, APIHandler):
         
         # Build MCP servers list from agent-runtimes
         mcp_servers = []
+        logger.info("Handling agent config request; initializing MCP servers")
         try:
             servers = await initialize_mcp_servers()
         except Exception as exc:
@@ -95,7 +96,17 @@ class ConfigHandler(ExtensionHandlerMixin, APIHandler):
             server_id = resolve_mcp_server_id(server, fallback=f"mcp_server_{index}")
             tools = []
             try:
-                server_tools = await server.list_tools()
+                if hasattr(server, "list_tools"):
+                    server_tools = await server.list_tools()
+                elif hasattr(server, "get_tools"):
+                    server_tools = await server.get_tools()
+                else:
+                    server_tools = getattr(server, "tools", None)
+                    if server_tools is not None:
+                        logger.info(
+                            "Using cached tools metadata for MCP server %s",
+                            server_data.get("id", ""),
+                        )
                 for tool in server_tools or []:
                     tool_name = getattr(tool, "name", None)
                     tool_description = getattr(tool, "description", None)
@@ -123,6 +134,14 @@ class ConfigHandler(ExtensionHandlerMixin, APIHandler):
                 "enabled": server_data.get("enabled", True),
                 "tools": tools,
             })
+            logger.info(
+                "MCP server config[%d]: id=%s name=%s tools=%d",
+                index,
+                server_id,
+                server_data.get("name") or getattr(server, "name", ""),
+                len(tools),
+            )
+        logger.info("Agent config response includes %d MCP server(s)", len(mcp_servers))
         
         res = json.dumps({
             "models": models,
