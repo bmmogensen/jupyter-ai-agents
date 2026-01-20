@@ -10,6 +10,7 @@ import os
 
 import tornado
 
+from agent_runtimes.mcp.servers import initialize_mcp_servers
 from jupyter_server.base.handlers import APIHandler
 from jupyter_server.extension.handler import ExtensionHandlerMixin
 from jupyter_ai_agents.__version__ import __version__
@@ -71,13 +72,52 @@ class ConfigHandler(ExtensionHandlerMixin, APIHandler):
                 "isAvailable": False,
             })
         
-        # Build MCP servers list from shared configuration
+        # Build MCP servers list from agent-runtimes
         mcp_servers = []
-        for server in self.settings.get("mcp_servers", []):
+        try:
+            servers = await initialize_mcp_servers()
+        except Exception as exc:
+            logger.warning("Failed to initialize MCP servers: %s", exc)
+            servers = []
+
+        for server in servers:
             if hasattr(server, "model_dump"):
-                mcp_servers.append(server.model_dump(by_alias=True))
+                server_data = server.model_dump(by_alias=True)
+            elif hasattr(server, "dict"):
+                server_data = server.dict()
             else:
-                mcp_servers.append(server)
+                server_data = {}
+
+            tools = []
+            try:
+                server_tools = await server.list_tools()
+                for tool in server_tools or []:
+                    tool_name = getattr(tool, "name", None)
+                    tool_description = getattr(tool, "description", None)
+                    if tool_name is None and isinstance(tool, dict):
+                        tool_name = tool.get("name")
+                        tool_description = tool.get("description")
+                    tools.append({
+                        "name": tool_name,
+                        "description": tool_description or "",
+                        "enabled": True,
+                    })
+            except Exception as exc:
+                logger.warning(
+                    "Failed to list tools for MCP server %s: %s",
+                    server_data.get("id", ""),
+                    exc,
+                )
+
+            mcp_servers.append({
+                "id": server_data.get("id") or getattr(server, "id", ""),
+                "name": server_data.get("name") or getattr(server, "name", ""),
+                "description": server_data.get("description") or getattr(server, "description", ""),
+                "url": server_data.get("url") or "",
+                "isAvailable": server_data.get("isAvailable", True),
+                "enabled": server_data.get("enabled", True),
+                "tools": tools,
+            })
         
         res = json.dumps({
             "models": models,
