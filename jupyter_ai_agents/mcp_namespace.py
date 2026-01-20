@@ -48,6 +48,22 @@ def build_namespaced_tool_name(server_id: str, tool_name: str) -> str:
     return f"{safe_server}_{safe_tool}"
 
 
+def _describe_mcp_server(server: Any) -> str:
+    """Return a concise description of an MCP server for logging."""
+    if server is None:
+        return "server=<unknown>"
+    server_id = resolve_mcp_server_id(server, fallback=None) or "<unknown>"
+    is_available = getattr(server, "is_available", None)
+    transport = getattr(server, "transport", None)
+    command = getattr(server, "command", None)
+    args = getattr(server, "args", None)
+    url = getattr(server, "url", None)
+    return (
+        f"id={server_id} available={is_available} transport={transport} "
+        f"command={command} args={args} url={url}"
+    )
+
+
 @dataclass
 class NamespacedToolset(WrapperToolset[AgentDepsT]):
     """A toolset that namespaces tool names using a provider-safe separator."""
@@ -96,15 +112,18 @@ class NamespacedToolset(WrapperToolset[AgentDepsT]):
             original_name = name[len(prefix):] if name.startswith(prefix) else name
         ctx = replace(ctx, tool_name=original_name)
         tool = replace(tool, tool_def=replace(tool.tool_def, name=original_name))
+        server_info = _describe_mcp_server(getattr(self, "wrapped", None))
         try:
             return await super().call_tool(original_name, tool_args, ctx, tool)
         except Exception as exc:
             logger.exception(
-                "MCP tool call failed: tool=%s namespaced=%s args=%s",
+                "MCP tool call failed: tool=%s namespaced=%s args=%s server=%s",
                 original_name,
                 name,
                 tool_args,
+                server_info,
             )
             raise RuntimeError(
-                f"MCP tool call failed for {original_name}: {type(exc).__name__}: {exc}"
+                "MCP tool call failed for "
+                f"{original_name}: {type(exc).__name__}: {exc} ({server_info})"
             ) from exc
