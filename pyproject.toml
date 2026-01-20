@@ -78,6 +78,10 @@ allow-direct-references = true
 [tool.hatch.build.targets.sdist]
 artifacts = ["jupyter_ai_agents/labextension"]
 exclude = [".github", "binder"]
+include = ["jupyter_ai_agents/prompts/*.md"]
+
+[tool.hatch.build.targets.wheel]
+include = ["jupyter_ai_agents/prompts/*.md"]
 
 [tool.hatch.build.targets.wheel.shared-data]
 "jupyter_ai_agents/labextension" = "share/jupyter/labextensions/@datalayer/jupyter-ai-agents"
