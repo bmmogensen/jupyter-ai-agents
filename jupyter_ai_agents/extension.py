@@ -94,11 +94,6 @@ class JupyterAIAgentsExtensionApp(ExtensionAppJinjaMixin, ExtensionApp):
         
         self.settings.update({"disable_check_xsrf": True})
 
-        # Store server connection info for MCP server creation
-        # These will be used lazily when handling chat requests
-        self.settings["chat_base_url"] = self.serverapp.connection_url
-        self.settings["chat_token"] = self.serverapp.token
-
         # Initialize MCP servers (includes local Jupyter MCP server)
         self.settings["mcp_servers"] = asyncio.run(initialize_mcp_servers())
 
