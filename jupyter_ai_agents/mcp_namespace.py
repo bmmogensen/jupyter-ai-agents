@@ -25,13 +25,6 @@ def resolve_mcp_server_id(server: Any, fallback: str | None = None) -> str:
     return server_id or ""
 
 
-def build_namespaced_tool_name(server_id: str, tool_name: str) -> str:
-    """Build a stable namespaced tool name for UI/selection."""
-    if not server_id:
-        return tool_name
-    return f"{server_id}.{tool_name}"
-
-
 _ALLOWED_TOOL_NAME_RE = re.compile(r"[^a-zA-Z0-9_-]")
 
 
@@ -42,6 +35,15 @@ def sanitize_tool_component(value: str, fallback: str = "tool") -> str:
     if not cleaned:
         cleaned = fallback
     return cleaned[:128]
+
+
+def build_namespaced_tool_name(server_id: str, tool_name: str) -> str:
+    """Build a stable namespaced tool name for UI/selection."""
+    safe_server = sanitize_tool_component(server_id, fallback="mcp")
+    safe_tool = sanitize_tool_component(tool_name)
+    if not safe_server:
+        return safe_tool
+    return f"{safe_server}_{safe_tool}"
 
 
 @dataclass
