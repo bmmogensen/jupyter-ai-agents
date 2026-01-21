@@ -6,6 +6,7 @@
 
 import json
 import logging
+from contextlib import AsyncExitStack
 from typing import Any
 from urllib.parse import urljoin
 
@@ -187,25 +188,25 @@ class VercelAIChatHandler(APIHandler):
                 total_tokens_limit=100000,
             )
 
-            # Execute within MCP server context if available
             if mcp_server:
-                async with mcp_server:
-                    # Add MCP server to toolsets for this request
-                    request_toolsets = toolsets + [mcp_server]
-                    
-                    # Use VercelAIAdapter.dispatch_request (new API)
+                toolsets.append(mcp_server)
+
+            if toolsets:
+                async with AsyncExitStack() as stack:
+                    for server in toolsets:
+                        await stack.enter_async_context(server)
+
                     response = await VercelAIAdapter.dispatch_request(
                         tornado_request,
                         agent=agent,
                         model=model,
                         usage_limits=usage_limits,
-                        toolsets=request_toolsets,
+                        toolsets=toolsets,
                         builtin_tools=builtin_tools,
                     )
-                    
+
                     await self._stream_response(response)
             else:
-                # No MCP server - use standard toolsets
                 response = await VercelAIAdapter.dispatch_request(
                     tornado_request,
                     agent=agent,
@@ -214,7 +215,7 @@ class VercelAIChatHandler(APIHandler):
                     toolsets=toolsets,
                     builtin_tools=builtin_tools,
                 )
-                
+
                 await self._stream_response(response)
 
         except Exception as e:
