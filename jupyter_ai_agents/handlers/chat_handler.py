@@ -150,7 +150,8 @@ class VercelAIChatHandler(APIHandler):
             use_mcp_server = len(builtin_tools_from_request) > 0
 
             # Build toolsets list
-            toolsets = list(self.settings.get("chat_toolsets", []))
+            toolsets = list(self.settings.get("mcp_servers", []))
+            toolsets.extend(self.settings.get("chat_toolsets", []))
             
             # Connect to jupyter-mcp-server if MCP tools are enabled
             mcp_server = None
