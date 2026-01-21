@@ -191,9 +191,11 @@ class VercelAIChatHandler(APIHandler):
             if mcp_server:
                 toolsets.append(mcp_server)
 
-            if toolsets:
+            async_toolsets = [server for server in toolsets if hasattr(server, "__aenter__")]
+
+            if async_toolsets:
                 async with AsyncExitStack() as stack:
-                    for server in toolsets:
+                    for server in async_toolsets:
                         await stack.enter_async_context(server)
 
                     response = await VercelAIAdapter.dispatch_request(
