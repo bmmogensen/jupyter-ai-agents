@@ -109,18 +109,41 @@ class VercelAIChatHandler(APIHandler):
             model = body.get("model")
             
             # Check if any MCP tools are enabled (builtinTools contains enabled tool names)
-            # If builtinTools is non-empty, we should connect to the MCP server
             builtin_tools_from_request = body.get("builtinTools", [])
-            use_mcp_server = len(builtin_tools_from_request) > 0
+            requested_mcp_servers = body.get("mcpServers", body.get("mcp_servers"))
 
             # Build toolsets list
             toolsets = list(self.settings.get("chat_toolsets", []))
 
-            if use_mcp_server:
-                toolsets.extend(self.settings.get("mcp_toolsets", []))
+            available_toolsets = self.settings.get("mcp_toolsets", [])
+            enabled_toolsets = available_toolsets
+
+            if isinstance(requested_mcp_servers, list):
+                enabled_ids: set[str] = set()
+                for server in requested_mcp_servers:
+                    if isinstance(server, str):
+                        enabled_ids.add(server)
+                    elif isinstance(server, dict):
+                        if not server.get("enabled", True):
+                            continue
+                        server_id = server.get("id") or server.get("name")
+                        if server_id:
+                            enabled_ids.add(server_id)
+                if enabled_ids:
+                    enabled_toolsets = [
+                        toolset
+                        for toolset in available_toolsets
+                        if getattr(toolset, "id", None) in enabled_ids
+                    ]
+                else:
+                    enabled_toolsets = []
+
+            if enabled_toolsets or builtin_tools_from_request:
+                toolsets.extend(enabled_toolsets)
                 logger.info(
-                    "Using shared MCP servers for chat request "
-                    f"with {len(builtin_tools_from_request)} enabled tools"
+                    "Using shared MCP toolsets for chat request "
+                    f"(toolsets={len(enabled_toolsets)}, "
+                    f"builtin_tools={len(builtin_tools_from_request)})"
                 )
 
             # Get builtin tools (empty list - tools metadata is only for UI display)
