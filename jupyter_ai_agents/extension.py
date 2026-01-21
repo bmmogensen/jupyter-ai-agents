@@ -14,6 +14,7 @@ from traitlets.config import Configurable
 from jupyter_server.utils import url_path_join
 from jupyter_server.extension.application import ExtensionApp, ExtensionAppJinjaMixin
 
+from agent_runtimes.mcp import get_mcp_toolsets, initialize_mcp_toolsets
 from agent_runtimes.mcp.servers import initialize_mcp_servers
 from jupyter_ai_agents.handlers.index import IndexHandler
 from jupyter_ai_agents.handlers.config import ConfigHandler
@@ -96,6 +97,8 @@ class JupyterAIAgentsExtensionApp(ExtensionAppJinjaMixin, ExtensionApp):
 
         # Initialize MCP servers (includes local Jupyter MCP server)
         self.settings["mcp_servers"] = asyncio.run(initialize_mcp_servers())
+        asyncio.run(initialize_mcp_toolsets())
+        self.settings["mcp_toolsets"] = get_mcp_toolsets()
 
         # Create chat agent
         try:

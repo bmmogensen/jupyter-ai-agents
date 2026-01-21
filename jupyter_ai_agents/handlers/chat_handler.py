@@ -117,7 +117,7 @@ class VercelAIChatHandler(APIHandler):
             toolsets = list(self.settings.get("chat_toolsets", []))
 
             if use_mcp_server:
-                toolsets.extend(self.settings.get("mcp_servers", []))
+                toolsets.extend(self.settings.get("mcp_toolsets", []))
                 logger.info(
                     "Using shared MCP servers for chat request "
                     f"with {len(builtin_tools_from_request)} enabled tools"
