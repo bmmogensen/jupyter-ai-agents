@@ -7,49 +7,13 @@
 import json
 import logging
 from typing import Any
-from urllib.parse import urljoin
 
 from jupyter_server.base.handlers import APIHandler
 from pydantic_ai import UsageLimits
-from pydantic_ai.mcp import MCPServerStreamableHTTP
 from pydantic_ai.ui.vercel_ai import VercelAIAdapter
 from starlette.requests import Request
 
 logger = logging.getLogger(__name__)
-
-
-def create_mcp_server(
-    base_url: str,
-    token: str | None = None,
-) -> MCPServerStreamableHTTP:
-    """
-    Create an MCP server connection to the local jupyter-mcp-server.
-
-    The MCP server runs on the same Jupyter server and exposes tools via
-    the MCP protocol over HTTP at the /mcp endpoint.
-
-    Args:
-        base_url: Server base URL (e.g., "http://localhost:8888")
-        token: Authentication token
-
-    Returns:
-        MCPServerStreamableHTTP instance connected to the MCP server
-    """
-    # Construct the MCP endpoint URL
-    mcp_url = urljoin(base_url.rstrip("/") + "/", "mcp")
-
-    logger.info(f"Creating MCP server connection to {mcp_url}")
-
-    # Create MCP server with authentication headers if token is provided
-    if token:
-        headers = {"Authorization": f"token {token}"}
-        server = MCPServerStreamableHTTP(mcp_url, headers=headers)
-        logger.info("MCP server connection created successfully with authentication")
-    else:
-        server = MCPServerStreamableHTTP(mcp_url)
-        logger.info("MCP server connection created successfully without authentication")
-
-    return server
 
 
 class TornadoRequestAdapter(Request):
@@ -145,35 +109,42 @@ class VercelAIChatHandler(APIHandler):
             model = body.get("model")
             
             # Check if any MCP tools are enabled (builtinTools contains enabled tool names)
-            # If builtinTools is non-empty, we should connect to the MCP server
             builtin_tools_from_request = body.get("builtinTools", [])
-            use_mcp_server = len(builtin_tools_from_request) > 0
+            requested_mcp_servers = body.get("mcpServers", body.get("mcp_servers"))
 
             # Build toolsets list
             toolsets = list(self.settings.get("chat_toolsets", []))
-            
-            # Connect to jupyter-mcp-server if MCP tools are enabled
-            mcp_server = None
-            
-            if use_mcp_server:
-                # Create MCP server connection to local jupyter-mcp-server
-                base_url = self.settings.get("chat_base_url")
-                token = self.settings.get("chat_token")
-                
-                if base_url:
-                    try:
-                        mcp_server = create_mcp_server(base_url, token)
-                        logger.info(
-                            f"Created jupyter-mcp-server connection for chat request "
-                            f"with {len(builtin_tools_from_request)} enabled tools"
-                        )
-                    except Exception as mcp_error:
-                        logger.warning(
-                            f"Failed to create jupyter-mcp-server connection: {mcp_error}. "
-                            "Continuing without MCP tools."
-                        )
+
+            available_toolsets = self.settings.get("mcp_toolsets", [])
+            enabled_toolsets = available_toolsets
+
+            if isinstance(requested_mcp_servers, list):
+                enabled_ids: set[str] = set()
+                for server in requested_mcp_servers:
+                    if isinstance(server, str):
+                        enabled_ids.add(server)
+                    elif isinstance(server, dict):
+                        if not server.get("enabled", True):
+                            continue
+                        server_id = server.get("id") or server.get("name")
+                        if server_id:
+                            enabled_ids.add(server_id)
+                if enabled_ids:
+                    enabled_toolsets = [
+                        toolset
+                        for toolset in available_toolsets
+                        if getattr(toolset, "id", None) in enabled_ids
+                    ]
                 else:
-                    logger.warning("MCP tools enabled but chat_base_url not set")
+                    enabled_toolsets = []
+
+            if enabled_toolsets or builtin_tools_from_request:
+                toolsets.extend(enabled_toolsets)
+                logger.info(
+                    "Using shared MCP toolsets for chat request "
+                    f"(toolsets={len(enabled_toolsets)}, "
+                    f"builtin_tools={len(builtin_tools_from_request)})"
+                )
 
             # Get builtin tools (empty list - tools metadata is only for UI display)
             # The actual pydantic-ai tools are registered in the agent itself
@@ -186,35 +157,16 @@ class VercelAIChatHandler(APIHandler):
                 total_tokens_limit=100000,
             )
 
-            # Execute within MCP server context if available
-            if mcp_server:
-                async with mcp_server:
-                    # Add MCP server to toolsets for this request
-                    request_toolsets = toolsets + [mcp_server]
-                    
-                    # Use VercelAIAdapter.dispatch_request (new API)
-                    response = await VercelAIAdapter.dispatch_request(
-                        tornado_request,
-                        agent=agent,
-                        model=model,
-                        usage_limits=usage_limits,
-                        toolsets=request_toolsets,
-                        builtin_tools=builtin_tools,
-                    )
-                    
-                    await self._stream_response(response)
-            else:
-                # No MCP server - use standard toolsets
-                response = await VercelAIAdapter.dispatch_request(
-                    tornado_request,
-                    agent=agent,
-                    model=model,
-                    usage_limits=usage_limits,
-                    toolsets=toolsets,
-                    builtin_tools=builtin_tools,
-                )
-                
-                await self._stream_response(response)
+            response = await VercelAIAdapter.dispatch_request(
+                tornado_request,
+                agent=agent,
+                model=model,
+                usage_limits=usage_limits,
+                toolsets=toolsets,
+                builtin_tools=builtin_tools,
+            )
+            
+            await self._stream_response(response)
 
         except Exception as e:
             logger.error(f"Error in chat handler: {e}", exc_info=True)

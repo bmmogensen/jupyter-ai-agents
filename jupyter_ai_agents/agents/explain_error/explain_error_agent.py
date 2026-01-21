@@ -4,14 +4,12 @@
 
 """Pydantic AI Explain Error Agent - analyzes and fixes notebook errors."""
 
-import asyncio
 import logging
 from typing import Any
 
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent
 from pydantic_ai.mcp import MCPServerStreamableHTTP
 
-from agent_runtimes.mcp.servers import initialize_mcp_servers
 
 logger = logging.getLogger(__name__)
 
@@ -208,20 +206,18 @@ async def run_explain_error_agent(
 
 
 def create_explain_error_agent_sync(
-    base_url: str,
-    token: str,
     model: str,
+    mcp_servers: list[MCPServerStreamableHTTP],
     notebook_content: str = "",
     error_info: dict[str, Any] | None = None,
     error_cell_index: int = -1,
 ) -> Agent[ExplainErrorAgentDeps, str]:
     """
-    Create explain error agent with MCP server connection (synchronous wrapper).
+    Create explain error agent with provided MCP server connections (synchronous wrapper).
     
     Args:
-        base_url: Jupyter server base URL
-        token: Authentication token
         model: Model identifier
+        mcp_servers: MCP server connections to use as toolsets
         notebook_content: Notebook content
         error_info: Error information
         error_cell_index: Error cell index
@@ -229,7 +225,6 @@ def create_explain_error_agent_sync(
     Returns:
         Configured agent
     """
-    mcp_servers = asyncio.run(initialize_mcp_servers())
     return create_explain_error_agent(
         model, mcp_servers, notebook_content, error_info, error_cell_index
     )

@@ -4,14 +4,11 @@
 
 """Pydantic AI Prompt Agent - creates and executes code based on user instructions."""
 
-import asyncio
 import logging
 from typing import Any
 
 from pydantic_ai import Agent
 from pydantic_ai.mcp import MCPServerStreamableHTTP
-
-from agent_runtimes.mcp.servers import initialize_mcp_servers
 
 logger = logging.getLogger(__name__)
 
@@ -189,22 +186,19 @@ async def run_prompt_agent(
 
 
 def create_prompt_agent_sync(
-    base_url: str,
-    token: str,
     model: str,
+    mcp_servers: list[MCPServerStreamableHTTP],
     notebook_context: dict[str, Any] | None = None,
 ) -> Agent[PromptAgentDeps, str]:
     """
-    Create prompt agent with MCP server connection (synchronous wrapper).
+    Create prompt agent with provided MCP server connections (synchronous wrapper).
     
     Args:
-        base_url: Jupyter server base URL
-        token: Authentication token
         model: Model identifier
+        mcp_servers: MCP server connections to use as toolsets
         notebook_context: Optional notebook context
     
     Returns:
         Configured agent
     """
-    mcp_servers = asyncio.run(initialize_mcp_servers())
     return create_prompt_agent(model, mcp_servers, notebook_context)
