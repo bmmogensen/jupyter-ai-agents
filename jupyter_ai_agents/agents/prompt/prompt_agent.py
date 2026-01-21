@@ -9,9 +9,9 @@ import logging
 from typing import Any
 
 from pydantic_ai import Agent
-from pydantic_ai.mcp import MCPServerStreamableHTTP
 
-from agent_runtimes.mcp.servers import initialize_mcp_servers
+from agent_runtimes.mcp.toolsets import initialize_mcp_toolsets, get_mcp_toolsets
+from jupyter_ai_agents.mcp_utils import create_mcp_server
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ class PromptAgentDeps:
 
 def create_prompt_agent(
     model: str,
-    mcp_servers: list[MCPServerStreamableHTTP],
+    mcp_servers: list[Any],
     notebook_context: dict[str, Any] | None = None,
     max_tool_calls: int = 10,
 ) -> Agent[PromptAgentDeps, str]:
@@ -206,5 +206,8 @@ def create_prompt_agent_sync(
     Returns:
         Configured agent
     """
-    mcp_servers = asyncio.run(initialize_mcp_servers())
-    return create_prompt_agent(model, mcp_servers, notebook_context)
+    asyncio.run(initialize_mcp_toolsets())
+    toolsets = list(get_mcp_toolsets())
+    if base_url:
+        toolsets.append(create_mcp_server(base_url, token))
+    return create_prompt_agent(model, toolsets, notebook_context)
