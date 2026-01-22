@@ -25,7 +25,17 @@ The chat interface is built using [Pydantic AI](https://github.com/pydantic/pyda
 
 ### MCP Server Integration
 
-By default, the [Jupyter MCP Server](https://github.com/datalayer/jupyter-mcp-server) is started as a Jupyter server extension, providing access to all Jupyter MCP server tools directly through the chat interface. This enables the AI agent to interact with notebooks, execute code, manage files, and perform various Jupyter operations seamlessly.
+Jupyter AI Agents uses the active MCP server initialized by `agent-runtimes`. If multiple MCP servers are configured, the first available server is selected by default. You can explicitly select a server by setting the `active_mcp_server_id` traitlet.
+
+```python
+c.JupyterAIAgentsExtensionApp.active_mcp_server_id = "qprops"
+```
+
+```python
+c.JupyterAIAgentsExtensionApp.active_mcp_server_id = "jupyter"
+```
+
+The exact IDs depend on the MCP servers returned by `agent-runtimes` at startup.
 
 ![Jupyter AI Agents Chat 2](https://assets.datalayer.tech/jupyter-ai-agents/jupyter-ai-agents-chat-2.png)
 
@@ -51,6 +61,15 @@ Currently, we support **Anthropic Claude Sonnet 4.0** as the AI model. To get st
    ```
 
 4. **Access the chat interface** through the right panel in JupyterLab.
+
+### Install with Hatch
+
+If you prefer Hatch, you can build and install from the included `pyproject.toml`:
+
+```bash
+hatch build
+pip install dist/jupyter_ai_agents-*.whl
+```
 
 ### What's Coming Next
 
