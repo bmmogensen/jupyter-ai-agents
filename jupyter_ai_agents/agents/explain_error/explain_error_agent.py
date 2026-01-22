@@ -4,13 +4,14 @@
 
 """Pydantic AI Explain Error Agent - analyzes and fixes notebook errors."""
 
+import asyncio
 import logging
 from typing import Any
 
-from pydantic_ai import Agent, RunContext
-from pydantic_ai.mcp import MCPServerStreamableHTTP
+from pydantic_ai import Agent
 
-from jupyter_ai_agents.handlers.chat_handler import create_mcp_server
+from agent_runtimes.mcp.toolsets import initialize_mcp_toolsets, get_mcp_toolsets
+from jupyter_ai_agents.mcp_utils import create_mcp_server
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ class ExplainErrorAgentDeps:
 
 def create_explain_error_agent(
     model: str,
-    mcp_server: MCPServerStreamableHTTP,
+    mcp_servers: list[Any],
     notebook_content: str = "",
     error_info: dict[str, Any] | None = None,
     error_cell_index: int = -1,
@@ -79,7 +80,7 @@ def create_explain_error_agent(
     
     Args:
         model: Model identifier (e.g., 'anthropic:claude-sonnet-4-0', 'openai:gpt-4o')
-        mcp_server: MCP server connection to jupyter-mcp-server
+        mcp_servers: MCP server connections to use as toolsets
         notebook_content: Content of notebook cells leading up to the error
         error_info: Information about the error
         error_cell_index: Index of the cell where error occurred
@@ -106,7 +107,7 @@ def create_explain_error_agent(
     # Create agent with MCP toolset
     agent = Agent(
         model,
-        toolsets=[mcp_server],
+        toolsets=mcp_servers,
         model_settings={"parallel_tool_calls": False},
         deps_type=ExplainErrorAgentDeps,
         system_prompt=system_prompt,
@@ -228,7 +229,10 @@ def create_explain_error_agent_sync(
     Returns:
         Configured agent
     """
-    mcp_server = create_mcp_server(base_url, token)
+    asyncio.run(initialize_mcp_toolsets())
+    toolsets = list(get_mcp_toolsets())
+    if base_url:
+        toolsets.append(create_mcp_server(base_url, token))
     return create_explain_error_agent(
-        model, mcp_server, notebook_content, error_info, error_cell_index
+        model, toolsets, notebook_content, error_info, error_cell_index
     )

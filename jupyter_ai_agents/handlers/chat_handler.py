@@ -6,50 +6,17 @@
 
 import json
 import logging
+from contextlib import AsyncExitStack
 from typing import Any
-from urllib.parse import urljoin
 
 from jupyter_server.base.handlers import APIHandler
 from pydantic_ai import UsageLimits
-from pydantic_ai.mcp import MCPServerStreamableHTTP
 from pydantic_ai.ui.vercel_ai import VercelAIAdapter
 from starlette.requests import Request
 
+from jupyter_ai_agents.mcp_utils import create_mcp_server
+
 logger = logging.getLogger(__name__)
-
-
-def create_mcp_server(
-    base_url: str,
-    token: str | None = None,
-) -> MCPServerStreamableHTTP:
-    """
-    Create an MCP server connection to the local jupyter-mcp-server.
-
-    The MCP server runs on the same Jupyter server and exposes tools via
-    the MCP protocol over HTTP at the /mcp endpoint.
-
-    Args:
-        base_url: Server base URL (e.g., "http://localhost:8888")
-        token: Authentication token
-
-    Returns:
-        MCPServerStreamableHTTP instance connected to the MCP server
-    """
-    # Construct the MCP endpoint URL
-    mcp_url = urljoin(base_url.rstrip("/") + "/", "mcp")
-
-    logger.info(f"Creating MCP server connection to {mcp_url}")
-
-    # Create MCP server with authentication headers if token is provided
-    if token:
-        headers = {"Authorization": f"token {token}"}
-        server = MCPServerStreamableHTTP(mcp_url, headers=headers)
-        logger.info("MCP server connection created successfully with authentication")
-    else:
-        server = MCPServerStreamableHTTP(mcp_url)
-        logger.info("MCP server connection created successfully without authentication")
-
-    return server
 
 
 class TornadoRequestAdapter(Request):
@@ -150,7 +117,9 @@ class VercelAIChatHandler(APIHandler):
             use_mcp_server = len(builtin_tools_from_request) > 0
 
             # Build toolsets list
-            toolsets = list(self.settings.get("chat_toolsets", []))
+            base_toolsets = list(self.settings.get("mcp_toolsets", []))
+            toolsets = list(base_toolsets)
+            toolsets.extend(self.settings.get("chat_toolsets", []))
             
             # Connect to jupyter-mcp-server if MCP tools are enabled
             mcp_server = None
@@ -186,25 +155,33 @@ class VercelAIChatHandler(APIHandler):
                 total_tokens_limit=100000,
             )
 
-            # Execute within MCP server context if available
             if mcp_server:
-                async with mcp_server:
-                    # Add MCP server to toolsets for this request
-                    request_toolsets = toolsets + [mcp_server]
-                    
-                    # Use VercelAIAdapter.dispatch_request (new API)
+                toolsets.append(mcp_server)
+
+            base_toolset_ids = {id(server) for server in base_toolsets}
+            async_toolsets = [
+                server
+                for server in toolsets
+                if hasattr(server, "__aenter__")
+                and id(server) not in base_toolset_ids
+            ]
+
+            if async_toolsets:
+                async with AsyncExitStack() as stack:
+                    for server in async_toolsets:
+                        await stack.enter_async_context(server)
+
                     response = await VercelAIAdapter.dispatch_request(
                         tornado_request,
                         agent=agent,
                         model=model,
                         usage_limits=usage_limits,
-                        toolsets=request_toolsets,
+                        toolsets=toolsets,
                         builtin_tools=builtin_tools,
                     )
-                    
+
                     await self._stream_response(response)
             else:
-                # No MCP server - use standard toolsets
                 response = await VercelAIAdapter.dispatch_request(
                     tornado_request,
                     agent=agent,
@@ -213,7 +190,7 @@ class VercelAIChatHandler(APIHandler):
                     toolsets=toolsets,
                     builtin_tools=builtin_tools,
                 )
-                
+
                 await self._stream_response(response)
 
         except Exception as e:

@@ -5,6 +5,7 @@
 """The Jupyter AI Agents Server application."""
 
 import os
+import asyncio
 import logging
 
 from traitlets import default, CInt, Instance, Unicode
@@ -13,6 +14,8 @@ from traitlets.config import Configurable
 from jupyter_server.utils import url_path_join
 from jupyter_server.extension.application import ExtensionApp, ExtensionAppJinjaMixin
 
+from agent_runtimes.mcp.servers import initialize_mcp_servers
+from agent_runtimes.mcp.toolsets import initialize_mcp_toolsets, get_mcp_toolsets
 from jupyter_ai_agents.handlers.index import IndexHandler
 from jupyter_ai_agents.handlers.config import ConfigHandler
 from jupyter_ai_agents.handlers.chat_handler import VercelAIChatHandler
@@ -96,6 +99,11 @@ class JupyterAIAgentsExtensionApp(ExtensionAppJinjaMixin, ExtensionApp):
         # These will be used lazily when handling chat requests
         self.settings["chat_base_url"] = self.serverapp.connection_url
         self.settings["chat_token"] = self.serverapp.token
+
+        # Initialize MCP toolsets (Pydantic AI MCP servers) and server metadata
+        asyncio.run(initialize_mcp_toolsets())
+        self.settings["mcp_toolsets"] = get_mcp_toolsets()
+        self.settings["mcp_servers"] = asyncio.run(initialize_mcp_servers())
 
         # Create chat agent
         try:

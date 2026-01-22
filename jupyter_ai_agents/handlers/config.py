@@ -154,6 +154,16 @@ class ConfigHandler(ExtensionHandlerMixin, APIHandler):
             "enabled": is_available,  # Auto-enable if available
             "tools": tools,
         })
+
+        for server in self.settings.get("mcp_servers", []):
+            if getattr(server, "id", None) == "jupyter-mcp-server":
+                continue
+            if hasattr(server, "model_dump"):
+                mcp_servers.append(server.model_dump(by_alias=True))
+            elif hasattr(server, "dict"):
+                mcp_servers.append(server.dict(by_alias=True))
+            else:
+                mcp_servers.append(server)
         
         res = json.dumps({
             "models": models,
