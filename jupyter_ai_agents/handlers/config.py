@@ -94,8 +94,12 @@ class ConfigHandler(ExtensionHandlerMixin, APIHandler):
             server_url = getattr(server, "url", "") or ""
 
             try:
-                async with _server_context(server):
-                    tools_list = await server.list_tools()
+                tools_list = None
+                if hasattr(server, "list_tools"):
+                    async with _server_context(server):
+                        tools_list = await server.list_tools()
+                elif hasattr(server, "tools"):
+                    tools_list = getattr(server, "tools", [])
 
                 for tool in tools_list or []:
                     tools.append(
