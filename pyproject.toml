@@ -1,6 +1,8 @@
 # Copyright (c) 2024-2025 Datalayer, Inc.
 #
 # BSD 3-Clause License
+#
+# Hatch configuration for building/installing this package lives here.
 
 [build-system]
 requires = ["hatchling>=1.5.0", "jupyterlab>=4.0.0,<5", "hatch-nodejs-version>=0.3.2"]
