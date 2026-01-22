@@ -62,6 +62,15 @@ Currently, we support **Anthropic Claude Sonnet 4.0** as the AI model. To get st
 
 4. **Access the chat interface** through the right panel in JupyterLab.
 
+### Install with Hatch
+
+If you prefer Hatch, you can build and install from the included `pyproject.toml`:
+
+```bash
+hatch build
+pip install dist/jupyter_ai_agents-*.whl
+```
+
 ### What's Coming Next
 
 We're actively working on expanding the capabilities of Jupyter AI Agents:
