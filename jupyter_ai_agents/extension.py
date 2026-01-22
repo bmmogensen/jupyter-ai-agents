@@ -4,6 +4,7 @@
 
 """The Jupyter AI Agents Server application."""
 
+import asyncio
 import os
 import logging
 
@@ -12,6 +13,8 @@ from traitlets.config import Configurable
 
 from jupyter_server.utils import url_path_join
 from jupyter_server.extension.application import ExtensionApp, ExtensionAppJinjaMixin
+
+from agent_runtimes.mcp.servers import initialize_mcp_servers
 
 from jupyter_ai_agents.handlers.index import IndexHandler
 from jupyter_ai_agents.handlers.config import ConfigHandler
@@ -80,6 +83,12 @@ class JupyterAIAgentsExtensionApp(ExtensionAppJinjaMixin, ExtensionApp):
 
     launcher = Instance(Launcher)
 
+    active_mcp_server_id = Unicode(
+        "",
+        config=True,
+        help="MCP server id/name from agent-runtimes config to use. If empty, uses first available.",
+    )
+
     @default("launcher")
     def _default_launcher(self):
         return JupyterAIAgentsExtensionApp.Launcher(parent=self, config=self.config)
@@ -96,6 +105,29 @@ class JupyterAIAgentsExtensionApp(ExtensionAppJinjaMixin, ExtensionApp):
         # These will be used lazily when handling chat requests
         self.settings["chat_base_url"] = self.serverapp.connection_url
         self.settings["chat_token"] = self.serverapp.token
+
+        servers = asyncio.run(initialize_mcp_servers())
+        chosen = None
+        wanted = (self.active_mcp_server_id or "").strip()
+
+        if wanted:
+            for server in servers:
+                server_id = getattr(server, "id", None) or getattr(server, "name", None) or ""
+                if server_id == wanted:
+                    chosen = server
+                    break
+
+        if chosen is None and servers:
+            chosen = servers[0]
+
+        self.settings["mcp_server"] = chosen
+        self.settings["mcp_servers"] = servers
+
+        if chosen:
+            chosen_id = getattr(chosen, "id", None) or getattr(chosen, "name", None)
+            self.log.info(f"[jupyter-ai-agents] Active MCP server: {chosen_id}")
+        else:
+            self.log.warning("[jupyter-ai-agents] No MCP servers available from agent-runtimes.")
 
         # Create chat agent
         try:
