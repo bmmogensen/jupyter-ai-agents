@@ -7,6 +7,7 @@
 import json
 import logging
 import os
+from contextlib import asynccontextmanager
 
 import tornado
 
@@ -79,13 +80,21 @@ class ConfigHandler(ExtensionHandlerMixin, APIHandler):
         server_name = "Active MCP Server"
         server_url = ""
 
+        @asynccontextmanager
+        async def _server_context(active_server):
+            if hasattr(active_server, "__aenter__"):
+                async with active_server:
+                    yield
+            else:
+                yield
+
         if server:
             server_id = getattr(server, "id", None) or getattr(server, "name", None) or server_id
             server_name = getattr(server, "name", None) or server_id
             server_url = getattr(server, "url", "") or ""
 
             try:
-                async with server:
+                async with _server_context(server):
                     tools_list = await server.list_tools()
 
                 for tool in tools_list or []:

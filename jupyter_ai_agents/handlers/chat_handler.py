@@ -6,6 +6,7 @@
 
 import json
 import logging
+from contextlib import asynccontextmanager
 from typing import Any
 from urllib.parse import urljoin
 
@@ -147,6 +148,14 @@ class VercelAIChatHandler(APIHandler):
             server = self.settings.get("mcp_server")
             toolsets = [server] if server else []
 
+            @asynccontextmanager
+            async def _server_context(active_server):
+                if hasattr(active_server, "__aenter__"):
+                    async with active_server:
+                        yield
+                else:
+                    yield
+
             # Get builtin tools (empty list - tools metadata is only for UI display)
             # The actual pydantic-ai tools are registered in the agent itself
             builtin_tools: list[str] = []
@@ -159,7 +168,7 @@ class VercelAIChatHandler(APIHandler):
             )
 
             if server:
-                async with server:
+                async with _server_context(server):
                     response = await VercelAIAdapter.dispatch_request(
                         tornado_request,
                         agent=agent,
